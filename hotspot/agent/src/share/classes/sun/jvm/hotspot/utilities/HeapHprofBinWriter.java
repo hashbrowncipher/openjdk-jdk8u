@@ -379,10 +379,20 @@ public class HeapHprofBinWriter extends AbstractHeapGraphWriter {
     private static final int JVM_SIGNATURE_ARRAY   = '[';
     private static final int JVM_SIGNATURE_CLASS   = 'L';
 
+    public static class NotTerribleDataOutputStream extends DataOutputStream {
+        public NotTerribleDataOutputStream(OutputStream out) {
+            super(out);
+        }
+
+        public int getWritten() {
+            return this.written;
+        }
+    }
+
     public synchronized void write(String fileName) throws IOException {
         // open file stream and create buffered data output stream
         fos = new FileOutputStream(fileName);
-        out = new DataOutputStream(new BufferedOutputStream(fos));
+        out = new NotTerribleDataOutputStream(new BufferedOutputStream(fos));
 
         VM vm = VM.getVM();
         dbg = vm.getDebugger();
@@ -465,7 +475,7 @@ public class HeapHprofBinWriter extends AbstractHeapGraphWriter {
             // remember position of dump length, we will fixup
             // length later - hprof format requires length.
             out.flush();
-            currentSegmentStart = fos.getChannel().position();
+            currentSegmentStart = out.getWritten();
 
             // write dummy length of 0 and we'll fix it later.
             out.writeInt(0);
@@ -475,8 +485,7 @@ public class HeapHprofBinWriter extends AbstractHeapGraphWriter {
     @Override
     protected void writeHeapRecordEpilogue() throws IOException {
         if (useSegmentedHeapDump) {
-            out.flush();
-            if ((fos.getChannel().position() - currentSegmentStart - 4) >= HPROF_SEGMENTED_HEAP_DUMP_SEGMENT_SIZE) {
+            if ((out.getWritten() - currentSegmentStart - 4) >= HPROF_SEGMENTED_HEAP_DUMP_SEGMENT_SIZE) {
                 fillInHeapRecordLength();
                 currentSegmentStart = 0;
             }
@@ -486,7 +495,7 @@ public class HeapHprofBinWriter extends AbstractHeapGraphWriter {
     private void fillInHeapRecordLength() throws IOException {
 
         // now get current position to calculate length
-        long dumpEnd = fos.getChannel().position();
+        long dumpEnd = out.getWritten();
 
         // calculate length of heap data
         long dumpLenLong = (dumpEnd - currentSegmentStart - 4L);
@@ -1071,7 +1080,7 @@ public class HeapHprofBinWriter extends AbstractHeapGraphWriter {
     private static final int DUMMY_STACK_TRACE_ID = 1;
     private static final int EMPTY_FRAME_DEPTH = -1;
 
-    private DataOutputStream out;
+    private NotTerribleDataOutputStream out;
     private FileOutputStream fos;
     private Debugger dbg;
     private ObjectHeap objectHeap;
